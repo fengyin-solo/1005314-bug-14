@@ -28,6 +28,7 @@ const router = createRouter({
     { path: '/stratum', name: 'stratum', component: Stratum },
     { path: '/feature', name: 'feature', component: Feature },
     { path: '/find', name: 'find', component: Find },
+    { path: '/find/:id', name: 'find-detail', component: () => import('@/views/find/detail.vue') },
     { path: '/sherd', name: 'sherd', component: Sherd },
     { path: '/bone', name: 'bone', component: Bone },
     { path: '/flotation', name: 'flotation', component: Flotation },
