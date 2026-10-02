@@ -68,4 +68,8 @@ npm run build
 - 字段、状态、动作与流转目标集中在 `frontend/src/data/modules.ts`；示例数据在
   `frontend/src/data/seed.ts`。
 - 状态流转只允许在 `local-service.ts` 里改，页面组件不做业务判断。
+- 出土物校验口径集中在 `frontend/src/data/find-validation.ts`：器物编号以库房登记簿
+  （`find-register.ts`）的五位编号为准、不再重算，两类编号冲突时以登记簿为准，已归档的沿用
+  既有编号；最大尺寸必须填且大于 0，非法值直接退回并说明原因。口径调整后存量记录按版本标记
+  自动重判一遍，校验结果写回行内并落到出土物清单；列表、详情与导出的完残程度走同一读取口径。
 - 想回到初始数据：清掉浏览器里 `archaeology-field:entries` 这一项，或调用 `resetModule(模块)`。

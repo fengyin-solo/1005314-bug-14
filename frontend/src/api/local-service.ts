@@ -1,6 +1,11 @@
 import { MODULE_BY_KEY } from '@/data/modules'
+import { findRegisterEntry } from '@/data/find-register'
+import { resolveRegisterNumber, resolveCompleteness, validateFindEntry } from '@/data/find-validation'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
+
+// 完残程度的统一读取口径也从这里出去，列表、详情、导出读到的是同一份。
+export { resolveCompleteness }
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
 const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
@@ -43,6 +48,13 @@ export function runAction(key: string, id: number, action: string): ActionResult
   if (current === target) {
     return { ok: false, message: `${meta.entity}已经是「${target}」，不用重复操作` }
   }
+  if (key === 'find') {
+    // 出土物流转前先过现行校验口径，非法值直接退回并说明原因。
+    const validation = validateFindEntry(rows[index])
+    if (!validation.ok) {
+      return { ok: false, message: `出土物校验未通过，已退回：${validation.issues.join('；')}` }
+    }
+  }
   const lastStatus = meta.statuses[meta.statuses.length - 1]
   const updated: EntryRow = {
     ...rows[index],
@@ -61,12 +73,43 @@ export function resetModule(key: string): PageResult {
   return listEntries(key)
 }
 
+// 出土物登记保存：先按库房登记簿口径校验，非法值直接退回并说明原因，不落库。
+export function createFindEntry(fields: Record<string, string>): ActionResult {
+  const meta = moduleMeta('find')
+  const rows = listRows('find')
+  const { 编号, note } = resolveRegisterNumber({ 器物编号: fields['器物编号'] ?? '' })
+  const validation = validateFindEntry({ ...fields, 器物编号: 编号 })
+  if (!validation.ok) {
+    return { ok: false, message: `出土物登记被退回：${validation.issues.join('；')}` }
+  }
+  const id = rows.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0) + 1
+  const entry: EntryRow = {
+    id,
+    status: meta.statuses[0],
+    pending: true,
+    abnormal: false,
+    ...fields,
+    器物编号: 编号,
+    登记状态: findRegisterEntry(编号) ? '已登簿' : '未登簿',
+    校验结果: '通过',
+    校验说明: note === '' ? '符合库房登记簿口径' : note,
+  }
+  saveRows('find', [...rows, entry])
+  return { ok: true, message: `${meta.entity}已登记，器物编号 ${编号}` }
+}
+
 export function exportEntries(key: string): { filename: string; content: string } {
   const meta = moduleMeta(key)
   const header = ['编号', ...meta.fields, '当前状态']
   const lines = [header.join(',')]
   for (const row of listRows(key)) {
-    lines.push([row.id, ...meta.fields.map((field) => row[field] ?? ''), row.status].join(','))
+    const cells = meta.fields.map((field) => {
+      if (key === 'find' && field === '完残程度') {
+        return resolveCompleteness(row)
+      }
+      return row[field] ?? ''
+    })
+    lines.push([row.id, ...cells, row.status].join(','))
   }
   return { filename: `${meta.name}-清单.csv`, content: `\uFEFF${lines.join('\n')}` }
 }
